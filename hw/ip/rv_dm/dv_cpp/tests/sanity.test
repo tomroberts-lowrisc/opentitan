@@ -1,0 +1,8 @@
+# 0 - kDVResetOnce, 1 - kDVResetOccasional, 2 - kDVResetStress
+reset_mode=0
+# 0 - kDVCSRRandom, 1 - kDVCSRStress, 2 - kDVCSRBusAccess, 3 - kDVCSRAbsCmd
+csr_mode=0
+# 0 - kDVHostIdle, 1 - kDVHostRandom, 2 - kDVHostDelays
+host_mode=0
+# 0 - kDVDeviceRandom, 1 - kDVDeviceDelays
+device_mode=0

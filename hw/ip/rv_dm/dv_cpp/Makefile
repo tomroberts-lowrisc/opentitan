@@ -1,0 +1,81 @@
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+TOOL     = verilator
+
+SO_NAME  = debug_dpi.so
+
+BUILDDIR = build
+SRCEXT   = cc
+OBJDIR   = $(BUILDDIR)/obj
+BINDIR   = $(BUILDDIR)/bin
+
+SRCS    := $(shell find . -name '*.$(SRCEXT)' ! -path './tb/*' ! -path './build/*')
+SRCDIRS := $(shell find . -name '*.$(SRCEXT)' ! -name 'tb*' ! -name 'build*' -exec dirname {} \; | uniq)
+OBJS    := $(patsubst %.$(SRCEXT),$(OBJDIR)/%.o,$(SRCS))
+
+DEBUG    = -g
+INCLUDES = -Iagents/debug -Iagents/jtag -Iagents/reset -Ienv -Imodel -Itests
+CFLAGS   = -std=c++14 -m64 -fPIC -Wall -pedantic $(DEBUG) $(INCLUDES)
+LDFLAGS  = -shared
+
+CC       = $(CXX)
+
+# Add svdpi include
+TOOLDIR = $(subst bin/$(TOOL),,$(shell which $(TOOL)))
+ifeq ($(TOOL),vcs)
+  INCLUDES += -I$(TOOLDIR)include
+else
+  INCLUDES += -I$(TOOLDIR)share/verilator/include/vltstd
+endif
+
+# DUT config defines
+PARAM_NRHARTS = 1
+PARAM_IDCODEVALUE = 1
+
+CFLAGS += -DPARAM_NRHARTS=$(PARAM_NRHARTS) -DPARAM_IDCODEVALUE=$(PARAM_IDCODEVALUE)
+
+.PHONY: all clean
+
+all: build
+
+build: $(BINDIR)/$(SO_NAME)
+	fusesoc --cores-root=../../.. run --setup --build --target=sim --tool=$(TOOL) \
+      lowrisc:dv:rv_dm_cpp --NrHarts=$(PARAM_NRHARTS) --IdcodeValue=$(PARAM_IDCODEVALUE)
+
+$(BINDIR)/$(SO_NAME): buildrepo $(OBJS)
+	@mkdir -p `dirname $@`
+	@echo "Linking $@..."
+	@$(CC) $(OBJS) $(LDFLAGS) -o $@
+
+$(OBJDIR)/%.o: %.$(SRCEXT)
+	@echo "Generating dependencies for $<..."
+	@$(call make-depend,$<,$@,$(subst .o,.d,$@))
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	$(RM) -r $(BUILDDIR)
+
+buildrepo:
+	@$(call make-repo)
+
+define make-repo
+   for dir in $(SRCDIRS); \
+   do \
+	mkdir -p $(OBJDIR)/$$dir; \
+   done
+endef
+
+
+# usage: $(call make-depend,source-file,object-file,depend-file)
+define make-depend
+  $(CC) -MM       \
+        -MF $3    \
+        -MP       \
+        -MT $2    \
+        $(CFLAGS) \
+        $1
+endef
+
